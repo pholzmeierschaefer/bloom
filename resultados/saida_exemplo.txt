@@ -1,0 +1,30 @@
+mkdir -p bin
+gcc -Wall -Wextra -std=c11 -O2 -D_POSIX_C_SOURCE=200809L -Iinclude tests/exemplo.c src/filtro_bloom.c -o bin/exemplo -lm
+./bin/exemplo
+=== EXEMPLO PASSO A PASSO (N = 24 bits, d = 3) ===
+Estado inicial:
+   bits: 000000000000000000000000
+
+Inserindo 'gato':
+   'gato' usa os bits: 4 9 14
+   bits: 000010000100001000000000
+
+Inserindo 'cao':
+   'cao' usa os bits: 2 11 20
+   bits: 001010000101001000001000
+
+Inserindo 'pato':
+   'pato' usa os bits: 7 22 13
+   bits: 001010010101011000001010
+
+Consultas:
+   'gato' usa os bits: 4 9 14
+   -> ACEITA (bits lidos: 3)
+   'peixe' usa os bits: 6 14 22
+   -> REJEITADA (bits lidos: 1)
+   'galo' usa os bits: 4 19 10
+   -> REJEITADA (bits lidos: 2)
+   'coelho' usa os bits: 7 9 11
+   -> ACEITA (bits lidos: 3)
+
+phi medido = 0.625 | phi previsto = 0.670 | P previsto = 0.036

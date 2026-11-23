@@ -1,0 +1,18 @@
+mkdir -p bin
+gcc -Wall -Wextra -std=c11 -O2 -D_POSIX_C_SOURCE=200809L -Iinclude -g -fsanitize=address,undefined tests/teste_corretude.c src/filtro_bloom.c -o bin/teste_memoria -lm
+./bin/teste_memoria
+=== TESTES DE CORRECAO DO FILTRO DE BLOOM ===
+[T1] entradas invalidas
+[T2] filtro vazio rejeita tudo lendo 1 bit
+[T3] chave vazia ("") pode ser inserida e encontrada
+[T4] exemplo manual: 1 chave liga no maximo d bits, exatamente os seus enderecos
+[T5] inserir a mesma chave 100 vezes nao muda o vetor de bits
+[T6] nenhum falso negativo (10000 chaves inseridas, todas encontradas)
+[T7] busca sem sucesso: taxa de falsos positivos perto de P = 1/16
+      taxa medida = 0.0612 (alvo 0.0625)
+[T8] saturacao: 32 bits recebendo 500 chaves aceita (quase) tudo, sem falso negativo
+[T9] parametros otimos: n=50000, P=1/16 -> d=4 e N menor que 300000 bits (artigo)
+      N = 288540 bits, d = 4
+[T10] phi medido proximo de phi teorico (~0,5) no filtro otimo
+      phi medido = 0.4977, phi previsto = 0.5000
+TODOS OS 10 TESTES PASSARAM

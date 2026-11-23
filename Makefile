@@ -1,38 +1,37 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11 -O2 -Iinclude
-LDFLAGS = -lm
+CFLAGS = -Wall -Wextra -std=c11 -O2 -D_POSIX_C_SOURCE=200809L -Iinclude
+LIBS = -lm
 
-SRC_DIR = src
-TEST_DIR = tests
-BIN_DIR = bin
-BUILD_DIR = build
+all: bin/teste_corretude bin/exemplo bin/experimento
 
-OBJS = $(BUILD_DIR)/bloom.o
+bin/%: tests/%.c src/filtro_bloom.c include/filtro_bloom.h
+	mkdir -p bin
+	$(CC) $(CFLAGS) tests/$*.c src/filtro_bloom.c -o $@ $(LIBS)
 
-all: $(BIN_DIR)/test_correctness $(BIN_DIR)/experiment
+# Roda os testes de correção
+teste: bin/teste_corretude
+	./bin/teste_corretude
 
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
+# Mostra o exemplo passo a passo
+exemplo: bin/exemplo
+	./bin/exemplo
 
-$(BIN_DIR):
-	mkdir -p $(BIN_DIR)
+# Roda o experimento (gera resultados/*.csv; leva alguns minutos)
+experimento: bin/experimento
+	mkdir -p resultados
+	./bin/experimento
 
-$(BUILD_DIR)/bloom.o: $(SRC_DIR)/bloom.c include/bloom.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $(SRC_DIR)/bloom.c -o $@
+# Roda os testes com detector de erros de memória (AddressSanitizer + UBSan)
+memoria:
+	mkdir -p bin
+	$(CC) $(CFLAGS) -g -fsanitize=address,undefined tests/teste_corretude.c src/filtro_bloom.c -o bin/teste_memoria $(LIBS)
+	./bin/teste_memoria
 
-$(BIN_DIR)/test_correctness: $(TEST_DIR)/test_correctness.c $(OBJS) | $(BIN_DIR)
-	$(CC) $(CFLAGS) $< $(OBJS) -o $@ $(LDFLAGS)
+# Gera os PDFs (relatório, testes e roteiro dos slides) em docs/
+pdfs:
+	python3 docs/gerar_pdfs.py
 
-$(BIN_DIR)/experiment: $(TEST_DIR)/experiment.c $(OBJS) | $(BIN_DIR)
-	$(CC) $(CFLAGS) $< $(OBJS) -o $@ $(LDFLAGS)
+limpar:
+	rm -rf bin
 
-test: $(BIN_DIR)/test_correctness
-	./$(BIN_DIR)/test_correctness
-
-run_experiment: $(BIN_DIR)/experiment
-	./$(BIN_DIR)/experiment
-
-clean:
-	rm -rf $(BUILD_DIR) $(BIN_DIR) resultados_experimento.csv
-
-.PHONY: all test run_experiment clean
+.PHONY: all teste exemplo experimento memoria pdfs limpar
