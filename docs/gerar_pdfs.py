@@ -148,7 +148,7 @@ def graf_t(ctx, x, y, w, h, tam=7.5):
             [{"label": "T'' medido", "cor": AZUL, "pontos": pts},
              {"label": "fórmula exata", "cor": VERDE, "pontos": teo, "marcador": False, "tracejado": True},
              {"label": "artigo (= 2)", "cor": VERMELHO, "pontos": art, "marcador": False}],
-            "P'' alvo", "bits lidos por consulta", (0.012, 0.65), (0.8, 2.2), P_VALORES, [1, 1.25, 1.5, 1.75, 2],
+            "P'' alvo", "bits lidos", (0.012, 0.65), (0.8, 2.2), P_VALORES, [1, 1.25, 1.5, 1.75, 2],
             True, False, rotulo_p, lambda v: pt(v, 2), titulo="Tempo de rejeição T'' (n = 10⁶)", tam=tam)
 
 
@@ -158,7 +158,7 @@ def graf_tempo(ctx, x, y, w, h, tam=7.5):
     for p, cor in cores.items():
         pts = [(n, linha_exp("aleatoria", n, p)["ns_consultar"]) for n in (10000, 100000, 1000000)]
         series.append({"label": "P''=%s (d=%d)" % (frac(p), int(linha_exp("aleatoria", 10000, p)["d"])), "cor": cor, "pontos": pts})
-    grafico(ctx, x, y, w, h, series, "n (chaves inseridas)", "ns por consulta (média)", (7000, 1.5e6), (0, 100),
+    grafico(ctx, x, y, w, h, series, "n (chaves inseridas)", "ns / consulta", (7000, 1.5e6), (0, 100),
             [1e4, 1e5, 1e6], [0, 25, 50, 75, 100], True, False, lambda v: "10^%d" % round(math.log10(v)),
             lambda v: str(int(v)), titulo="Tempo de consulta × n", tam=tam)
 
@@ -174,126 +174,210 @@ def graf_hif(ctx, x, y, w, h, tam=7.5):
 
 
 # ---------------------------------------------------------------------------
-# 1) RELATÓRIO
+# 1) RELATÓRIO TÉCNICO (3 páginas de conteúdo + 1 página de referências)
 # ---------------------------------------------------------------------------
+def _fig_exemplo_relatorio(ctx, x, y, w, h):
+    """Diagrama compacto do exemplo didático (N=24, d=3) para o relatório."""
+    esc = Escritor(ctx)
+    estado = "001010010101011000001010"
+    esc.desenhar("Vetor após inserir 'gato' (4, 9, 14), 'cao' (2, 11, 20) e 'pato' (7, 13, 22):",
+                 x, y, w, 7.8, PRETO, 1.2, negrito=True)
+    desenhar_bits(ctx, x + 12, y + 13, estado, 19.5, {7: (1, 0.82, 0.55), 9: (1, 0.82, 0.55), 11: (1, 0.82, 0.55)}, True, 8.2)
+    esc.desenhar("• Consulta 'peixe' (6, 14, 22): bit 6 = 0 → REJEITADA no 1º bit (ausência garantida).   "
+                 "• Consulta 'coelho' (7, 9, 11, em laranja): todos 1 → ACEITA (falso positivo).",
+                 x, y + 46, w, 7.6, CINZA, 1.25)
+
+
 def gerar_relatorio():
-    d = Documento(os.path.join(DOCS, "relatorio.pdf"), "Relatório técnico · Filtro de Bloom · ED2 (GEX1210) · UFFS Chapecó", margem=48)
+    d = Documento(os.path.join(DOCS, "relatorio.pdf"), "Relatório técnico · Filtro de Bloom · ED2 (GEX1210) · UFFS Chapecó", margem=42)
     d.titulo("Filtro de Bloom (Método 2 de Bloom, 1970): solução, implementação em C e avaliação",
-             "Estruturas de Dados II (GEX1210) · UFFS Campus Chapecó · Relatório técnico · Novembro de 2026")
-    d.paragrafo("**Integrantes:** " + "; ".join(n + " (matrícula: ____)" for n in INTEGRANTES) + ".", 8.6)
-    d.paragrafo("**Artigo:** " + REF_BLOOM, 8.6)
+             "Estruturas de Dados II (GEX1210) · UFFS Campus Chapecó · Relatório Técnico · Novembro de 2026")
+    d.paragrafo("**Integrantes:** " + "; ".join(n + " (matrícula: ____)" for n in INTEGRANTES) + ".", 8.2, depois=1.5)
+    d.paragrafo("**Artigo estudado:** " + REF_BLOOM, 8.2, depois=3)
 
-    d.secao("1. Problema e escopo implementado")
-    d.paragrafo("Dado um conjunto de n mensagens, responder “esta mensagem pertence ao conjunto?” usando pouco espaço, quando quase todas as "
-                "consultas são de mensagens **ausentes**. Bloom troca certeza por espaço: aceita uma fração permitida P'' de **falsos positivos** "
-                "(erro de comissão) e garante **zero falsos negativos**. Os três fatores do artigo são o espaço N'' (bits), o tempo de rejeição T'' "
-                "(bits examinados até concluir que a mensagem está ausente) e o erro permitido P''.")
+    # ---- SEÇÃO 1 ----
+    d.secao("1. Problema, motivação e escopo implementado", 10.5)
+    d.paragrafo(
+        "O artigo de Bloom (1970) trata do problema de testar, uma a uma, se mensagens pertencem a um conjunto fixo de **n** itens quando "
+        "**a grande maioria das consultas é negativa** (elementos ausentes) e uma estrutura exata não cabe na memória principal (RAM). "
+        "Na abordagem **convencional** (tabela hash aberta sem erros), cada célula armazena a chave inteira (**b** bits) mais 1 bit de estado, "
+        "exigindo N = n·(b+1)·(T+2)/(T−1) bits — o que força o uso de disco lento quando n ou b são grandes. O **Método 1** reduz as células "
+        "para códigos de c < b bits, aceitando erros de comissão. O **Método 2 (Filtro de Bloom)** elimina totalmente as células e adota um "
+        "vetor único de **N''** bits individuais: ao tolerar uma fração controlada **P''** de **falsos positivos** e garantir **zero falsos negativos**, "
+        "reduz drasticamente o espaço sem degradar o **tempo de rejeição T''** (bits examinados até descartar uma chave ausente).",
+        8.6, depois=2.5, entrelinha=1.24)
     d.lista([
-        "**Implementado (núcleo em src/filtro_bloom.c):** `filtro_criar`, `filtro_criar_otimo`, `filtro_inserir`, `filtro_consultar`, `filtro_destruir` e as "
-        "medidas φ'' (medido e previsto) e P'' (previsto). Chaves são textos terminados em `'\\0'`.",
-        "**Simplificações (identificadas):** (i) os d endereços saem de **hash duplo** — FNV-1a e DJB2 com mistura final — como h1 + i·passo mod N'', em vez de d "
-        "funções independentes; (ii) os d endereços de uma chave podem coincidir; (iii) o dicionário em disco da aplicação de hifenização é **simulado**: "
-        "contamos como “acessos ao disco” as consultas aceitas; (iv) o Método 1 do artigo aparece só pelas fórmulas, não foi implementado.",
-        "**Fora do escopo:** remoção de chaves, redimensionamento, persistência, hashes criptográficos.",
-    ])
+        "**Núcleo implementado (`include/filtro_bloom.h`, `src/filtro_bloom.c`):** estrutura `FiltroBloom` com `filtro_criar`, "
+        "`filtro_criar_otimo` (dimensionamento no ponto ótimo φ'' = 1/2), `filtro_inserir`, `filtro_consultar` (com contagem opcional "
+        "`bits_lidos` para medir T''), `filtro_destruir`, `filtro_endereco`, `filtro_contar_uns`, `filtro_phi_empirico`, `filtro_phi_teorico` e `filtro_erro_teorico`.",
+        "**Módulos de verificação (`tests/`):** `teste_corretude.c` (10 asserções automatizadas), `exemplo.c` (traço didático bit a bit com 24 bits) "
+        "e `experimento.c` (bateria estatística variando n, P'' e distribuição de chaves + simulação da aplicação de hifenização do artigo).",
+        "**Simplificações identificadas e decisões:** (i) chaves são strings C terminadas em `'\\0'`; (ii) os d endereços são gerados por **hash duplo** "
+        "(FNV-1a 64 bits + DJB2 64 bits com avalanche final: `h1 + i·passo mod N''`, forçando `passo >= 1`) em vez de d funções independentes; "
+        "(iii) os d endereços de uma mesma chave podem coincidir; (iv) o dicionário em disco da hifenização é **simulado** por contagem de aceitações; "
+        "(v) o Método 1 é tratado apenas analiticamente (não implementado). **Fora do escopo:** remoção, redimensionamento, persistência e hashes criptográficos.",
+    ], 8.3, depois=1.4, entrelinha=1.22)
 
-    d.secao("2. Solução, invariantes e correspondência com o artigo")
-    d.paragrafo("A estrutura é um vetor de N'' bits, inicialmente todos 0. **Inserir** a mensagem x liga os d bits de endereços a₁…a_d de x. **Consultar** x lê esses d bits: "
-                "se algum vale 0, x é **rejeitada** (certamente ausente); se todos valem 1, x é **aceita** (provavelmente presente).")
-    d.tabela(["Artigo", "Código", "Significado"], [
-        ["N''", "`total_bits`", "bits do vetor"],
-        ["d", "`quantidade_hashes`", "endereços (bits) por mensagem"],
-        ["n", "`quantidade_inseridos`", "mensagens inseridas"],
-        ["φ'' = (1 − d/N'')ⁿ ≈ e^(−nd/N'')", "`filtro_phi_empirico/teorico`", "fração de bits que valem 0"],
-        ["P'' = (1 − φ'')^d", "`filtro_erro_teorico`", "probabilidade de falso positivo"],
-        ["T'' ≈ 1/φ''", "argumento `bits_lidos`", "bits lidos até rejeitar"],
-        ["Ponto ótimo φ'' = 1/2", "`filtro_criar_otimo`", "d = ⌈log₂(1/P'')⌉; N'' = ⌈n·log₂(1/P'')·log₂e⌉ ≈ 1,44·n·log₂(1/P'')"],
-    ], [3.2, 2.6, 4.2], 7.8)
-    d.paragrafo("**Invariantes.** **I1:** um bit 1 nunca volta a 0 (não há remoção). **I2:** após inserir x, os d bits de x valem 1; logo **não existem falsos negativos**. "
-                "**I3:** se um dos d bits de x vale 0, x nunca foi inserido (rejeição é certa); a aceitação é só provável. Os testes automatizados verificam I2 e I3 diretamente.")
+    # ---- SEÇÃO 2 ----
+    d.secao("2. Solução, invariantes e correspondência com o artigo", 10.5)
+    d.paragrafo(
+        "O filtro é um vetor de **N''** bits empacotados em `⌈N''/8⌉` bytes (`calloc` zera tudo na criação). O bit na posição `p` reside no byte `p/8`, "
+        "deslocamento `p%8` (`ligar_bit` aplica `|=`; `ler_bit` isola com `>>` e `& 1`). Para **inserir** x, calculam-se d endereços e ligam-se esses bits. "
+        "Para **consultar** x, testam-se os d endereços em sequência: ao primeiro 0 encontrado, rejeita-se imediatamente (**certeza de ausência**); se todos "
+        "valerem 1, aceita-se (**pertence ou falso positivo**). Após n inserções, a fração esperada de bits em 0 é **φ'' = (1 − d/N'')ⁿ ≈ e^(−nd/N'')**, "
+        "a taxa esperada de falsos positivos é **P'' = (1 − φ'')^d** e o tempo esperado de rejeição converge para **T'' ≈ 1/φ''**. Minimiza-se o espaço "
+        "normalizado S'' = N''/(−n·log₂P'') exatamente quando **φ'' = 1/2** (metade dos bits em 1, T'' = 2), resultando em **S'' = log₂(e) ≈ 1,44**, "
+        "**d = ⌈−log₂(P'')⌉** e **N'' = ⌈n·(−log₂P'')·log₂(e)⌉**.",
+        8.6, depois=3, entrelinha=1.24)
+    d.figura(62, _fig_exemplo_relatorio)
+    d.tabela(["Símbolo no artigo", "Identificador no código C", "Significado e relação matemática"], [
+        ["N''", "`total_bits`", "Tamanho do vetor em bits (alocados `⌈N''/8⌉` bytes em `vetor_de_bits`)"],
+        ["d", "`quantidade_hashes`", "Endereços por chave; no ponto ótimo: `d = ⌈−log₂(P'')⌉`"],
+        ["n", "`quantidade_inseridos`", "Total de inserções realizadas no filtro"],
+        ["φ'' = (1 − d/N'')ⁿ", "`filtro_phi_empirico` / `_teorico`", "Proporção de bits em 0 (medida varrendo o vetor vs teórica)"],
+        ["P'' = (1 − φ'')^d", "`filtro_erro_teorico`", "Probabilidade esperada de falso positivo para chave ausente"],
+        ["T'' ≈ 1/φ''", "`*bits_lidos` em `filtro_consultar`", "Número de bits examinados até rejeitar (ou d se aceita)"],
+        ["Ponto ótimo (φ'' = 1/2)", "`filtro_criar_otimo(n, erro)`", "`d = ⌈−log₂(erro)⌉`; `N'' = ⌈n · (−log₂(erro)) · log₂(e)⌉`"],
+    ], [2.4, 3.1, 4.7], 7.4)
+    d.paragrafo(
+        "**Invariantes estruturais:** **I1 (Monotonicidade):** um bit 1 jamais retorna a 0 (não há remoção). **I2 (Zero falsos negativos):** após inserir x, "
+        "seus d bits valem 1 e nunca são desligados; logo `filtro_consultar(f, x)` sempre retorna `true`. **I3 (Certeza na rejeição):** se ao menos um dos d bits "
+        "de x vale 0, x nunca foi inserido; o retorno `false` é exato, enquanto `true` é probabilístico.",
+        8.4, depois=2.5, entrelinha=1.23)
 
-    d.secao("3. Complexidade das operações (parâmetros e hipóteses)")
-    d.paragrafo("Sejam |k| o tamanho da chave em caracteres, n o número de chaves, P'' o erro alvo e d = ⌈log₂(1/P'')⌉ (constante para P'' fixo, **independente de n**).", depois=2)
-    d.tabela(["Operação", "Custo", "Observação"], [
-        ["`filtro_criar`", "O(N''/8) = O(n·log(1/P''))", "`calloc` zera os bytes; espaço N'' bits"],
-        ["`filtro_inserir`", "O(|k| + d)", "dois hashes percorrem a chave; d escritas de bit"],
-        ["`filtro_consultar`", "pior caso O(|k| + d); rejeição esperada ≈ 1/φ'' = 2 bits lidos", "para no primeiro bit 0 (invariante I3)"],
-        ["`filtro_phi_empirico`", "O(N'')", "só medição; não faz parte do uso normal"],
-        ["Espaço", "≈ 1,44·n·log₂(1/P'') bits", "convencional: n·(b+1)·(T+2)/(T−1) bits (artigo)"],
-    ], [2.2, 4.3, 4.2], 7.8)
-    d.paragrafo("**Hipóteses:** as funções de hash se comportam como uniformes e independentes; as mensagens consultadas ausentes se comportam como chaves "
-                "aleatórias; o filtro foi dimensionado para o n real (com n maior que o projetado, φ'' cai e P'' sobe — teste T8); |k| é limitado; "
-                "acessos à memória têm custo constante (efeitos de cache não entram na fórmula).")
+    # ---- PÁGINA 2: COMPLEXIDADE + TESTES + EXPERIMENTO (MÉTODO E TABELA) ----
+    d.nova_pagina()
+    d.secao("3. Análise de complexidade, parâmetros e hipóteses", 10.5)
+    d.paragrafo(
+        "Sejam **|k|** o comprimento da chave em bytes, **n** o número de elementos esperados, **P''** o erro alvo e **d = ⌈log₂(1/P'')⌉** (constante para P'' fixo, **independente de n**).",
+        8.5, depois=2)
+    d.tabela(["Operação", "Tempo", "Espaço adicional / estrutura", "Justificativa técnica"], [
+        ["`filtro_criar`", "O(N''/8) = O(n·log(1/P''))", "⌈N''/8⌉ bytes (≈ 1,44·n·log₂(1/P'') bits)", "`calloc` zera toda a memória alocada"],
+        ["`filtro_criar_otimo`", "O(N''/8)", "O(n·log(1/P'')) bits", "Calcula d e N'' em O(1) e delega para `filtro_criar`"],
+        ["`filtro_inserir`", "O(|k| + d)", "O(1)", "FNV-1a e DJB2 percorrem os |k| bytes; laço de d escritas de bit"],
+        ["`filtro_consultar`", "Pior: O(|k| + d); Esp. rej.: O(|k| + 1/φ'')", "O(1)", "Para no 1º bit 0 (em φ''=0,5 lê ≈ 2 bits em média)"],
+        ["`filtro_phi_empirico`", "O(N'')", "O(1)", "Função de inspeção que varre todos os N'' bits (não usada em produção)"],
+        ["Comparação espaço", "—", "Bloom: ≈ 1,44·log₂(1/P'') bits/chave", "Convencional: (b+1)·(T+2)/(T−1) bits/chave (130 bits p/ b=64, T=4)"],
+    ], [2.1, 2.7, 2.7, 3.3], 7.3)
+    d.paragrafo(
+        "**Hipóteses da análise:** (H1) os dois hashes combinados aproximam distribuição uniforme e independente sobre `{0,…,N''−1}`; "
+        "(H2) chaves consultadas não são escolhidas por um adversário para forçar colisões; (H3) o número real de inserções não excede n planejado "
+        "(exceder n reduz φ'' e eleva P'' exponencialmente, como verificado em T8); (H4) acessos à memória têm custo unitário na análise assintótica "
+        "(efeitos reais de cache L1/L2/L3 aparecem nas medições empíricas de tempo).",
+        8.4, depois=3, entrelinha=1.23)
 
-    d.secao("4. Testes e experimento")
-    d.subsecao("4.1 Correção (`make teste`, `make memoria`)")
-    d.paragrafo("São 10 testes automatizados com `assert`: entradas inválidas (NULL e parâmetros 0), filtro vazio (rejeita lendo 1 bit, φ''=1), chave vazia, exemplo manual, "
-                "elementos repetidos (vetor não muda), **ausência de falsos negativos** (10.000 chaves), busca sem sucesso (falsos positivos ≈ P''), saturação (32 bits com 500 chaves), "
-                "parâmetros ótimos do artigo (n=50.000, P''=1/16 → d=4, N''=288.540 bits) e φ'' medido ≈ φ'' previsto ≈ 0,5. **Erros permitidos × defeitos:** falso positivo é erro "
-                "permitido (o teste só exige taxa entre P''/2 e 2P''); falso negativo, falha em entrada inválida e vazamento de memória são defeitos (exigem zero). Todos passam; "
-                "com AddressSanitizer e UBSan não há erros nem vazamentos.")
-    d.subsecao("4.2 Experimento: as fórmulas do artigo descrevem o filtro implementado?")
-    d.paragrafo("**Método.** n ∈ {10⁴, 10⁵, 10⁶}; P'' alvo ∈ {1/2, …, 1/64} (N'' e d pelo ponto ótimo); duas distribuições de chaves (sequencial `i_3_17` e pseudoaleatória hexadecimal, SplitMix64); "
-                "**10 repetições** por configuração, cada uma com filtro novo, n inserções e 10⁵ consultas de chaves ausentes. As chaves são determinísticas (semente = número da repetição, "
-                "sem `rand()`); como as consultadas são ausentes por construção, todo aceite é falso positivo (**resultado exato de referência**). A geração das chaves fica fora do tempo medido "
-                "(`CLOCK_MONOTONIC`). Ambiente: %s, %s, `%s`, %s. Valores: média ± desvio padrão amostral." % (ENV["cpu"], ENV["gcc"].split(" (")[0] + " " + ENV["gcc"].split(" ")[-1], ENV["flags"], ENV["so"]))
+    d.secao("4. Método e resultados dos testes e experimento", 10.5)
+    d.subsecao("4.1 Testes de correção e verificação de memória (`make teste`, `make memoria`)", 9.2)
+    d.paragrafo(
+        "Os 10 testes em `tests/teste_corretude.c` usam `assert()` e distinguem explicitamente **defeitos de implementação** (tolerância zero) "
+        "de **erros permitidos pelo método** (falsos positivos controlados próximos de P''):",
+        8.4, depois=2)
+    d.tabela(["Testes", "Categoria e invariante verificada", "Critério de aceitação e resultado observado"], [
+        ["T1 – T3", "Casos-limite (NULL, 0 bits, 0 hashes, filtro vazio, chave `\"\"`)", "Devolve NULL/false sem falha; filtro vazio rejeita em 1 bit com φ''=1,0. **Passou**"],
+        ["T4 – T5", "Exemplo manual (64 bits, d=3) e repetição (100× mesma chave)", "Liga 1..d bits nos endereços exatos; repetições não alteram contagem de 1s. **Passou**"],
+        ["T6", "Invariante I2 — ausência de falsos negativos (10.000 chaves)", "100% das chaves inseridas retornam `true` (0 falsos negativos). **Passou**"],
+        ["T7", "Erro permitido — busca sem sucesso (n=10⁴, P''=1/16, 10⁵ buscas)", "Taxa medida = **0,0612** (dentro da faixa [0,031; 0,125] em torno de 0,0625). **Passou**"],
+        ["T8", "Saturação extrema (32 bits recebendo 500 chaves)", "φ'' < 0,05 e falso positivo esperado ocorre, porém I2 mantém 0 falsos negativos. **Passou**"],
+        ["T9 – T10", "Fórmulas do artigo (caso n=50 mil, P''=1/16 e ponto ótimo φ''≈0,5)", "Obtido d=4 e N''=288.540 (<300 mil); para n=20 mil, φ'' medido=**0,4977** (teór. 0,5000). **Passou**"],
+        ["ASan+UBSan", "Segurança de memória (`-fsanitize=address,undefined`)", "0 acessos inválidos, 0 comportamentos indefinidos, 0 vazamentos de memória. **Passou**"],
+    ], [1.2, 4.0, 5.2], 7.3)
+
+    d.subsecao("4.2 Experimento: as equações de Bloom (1970) descrevem o comportamento real em C?", 9.2)
+    d.paragrafo(
+        "**Protocolo:** Variaram-se **n ∈ {10.000, 100.000, 1.000.000}**, **P'' alvo ∈ {1/2, 1/4, 1/8, 1/16, 1/32, 1/64}** (dimensionados por `filtro_criar_otimo`) "
+        "e **duas distribuições de chaves**: sequencial (`i_<rep>_<i>`) e pseudoaleatória hexadecimal (SplitMix64, 16 dígitos). Cada configuração teve **10 repetições** "
+        "independentes e determinísticas (semente = índice da repetição, sem `rand()`), inserindo n chaves e consultando **100.000 chaves ausentes** por construção "
+        "(referência exata: todo aceite é falso positivo). A geração das chaves foi alocada previamente e ficou fora da cronometragem (`clock_gettime(CLOCK_MONOTONIC)`). "
+        "Ambiente: %s | %s | `%s` | %s. Os valores abaixo reportam média ± desvio padrão amostral."
+        % (ENV["cpu"], ENV["gcc"].split(" (")[0] + " " + ENV["gcc"].split(" ")[-1], ENV["flags"], ENV["so"]),
+        8.2, depois=2.5, entrelinha=1.22)
     linhas = []
     for p in P_VALORES:
         a, b, c = (linha_exp("aleatoria", n, p) for n in (10000, 100000, 1000000))
-        linhas.append([frac(p), int(c["d"]), pt(c["bits_por_chave"]), pt(c["phi_emp"], 3),
+        linhas.append([frac(p), int(c["d"]), pt(c["bits_por_chave"]), pt(c["phi_emp"], 4),
                        "%s ± %s" % (pt(a["P_emp"], 4), pt(a["P_dp"], 4)),
                        "%s ± %s" % (pt(b["P_emp"], 4), pt(b["P_dp"], 4)),
                        "%s ± %s" % (pt(c["P_emp"], 4), pt(c["P_dp"], 4)),
                        "%s (%s)" % (pt(c["T_emp"], 3), pt(t_exato(c), 3)),
-                       pt(c["ns_consultar"], 0)])
-    d.tabela(["P'' alvo", "d", "bits/chave", "φ'' (n=10⁶)", "P'' medido n=10⁴", "P'' medido n=10⁵", "P'' medido n=10⁶", "T'' medido (fórmula)", "ns/cons."],
-             linhas, [1, 0.6, 1, 1.1, 1.9, 1.9, 1.9, 1.7, 1.1], 7.2, ["centro"] * 9)
-    d.figura(150, lambda ctx, x, y, w, h: (graf_p_emp(ctx, x, y, w / 2 - 4, h), graf_bits(ctx, x + w / 2 + 4, y, w / 2 - 4, h)))
-    d.legenda("Figura 1 – Esq.: erro medido coincide com o alvo (linha tracejada). Dir.: o filtro usa 1,4 a 8,7 bits por chave contra 130 do método convencional.")
+                       "%s ± %s" % (pt(c["ns_inserir"], 0), pt(c["ns_inserir_dp"], 0)),
+                       "%s ± %s" % (pt(c["ns_consultar"], 0), pt(c["ns_consultar_dp"], 0))])
+    d.tabela(["P'' alvo", "d", "bits/ch.", "φ'' (n=10⁶)", "P'' medido n=10⁴", "P'' medido n=10⁵", "P'' medido n=10⁶", "T'' med. (exato)", "ns/ins. (10⁶)", "ns/cons. (10⁶)"],
+             linhas, [0.85, 0.45, 0.85, 1.05, 1.65, 1.65, 1.65, 1.45, 1.2, 1.25], 6.8, ["centro"] * 10)
+    d.paragrafo(
+        "**Nota sobre as chaves sequenciais:** embora a tabela acima exiba a distribuição pseudoaleatória, todas as 18 combinações também foram executadas com chaves "
+        "sequenciais (dados completos em `docs/testes.pdf` e `resultados/experimento.csv`). A comparação entre ambas é analisada na seção seguinte.",
+        7.9, depois=2, cor=CINZA)
+
+    # ---- PÁGINA 3: GRÁFICOS + ANÁLISE + HIFENIZAÇÃO + LIMITAÇÕES + CONTRIBUIÇÕES ----
+    d.nova_pagina()
+    d.subsecao("4.3 Gráficos e interpretação dos resultados", 9.2)
+    d.figura(110, lambda ctx, x, y, w, h: (graf_p_emp(ctx, x, y, w / 2 - 4, h, tam=7.0), graf_bits(ctx, x + w / 2 + 4, y, w / 2 - 4, h, tam=7.0)))
+    d.legenda("Figura 1 – Esq.: P'' medido × alvo (chaves pseudoaleatórias). Dir.: Bloom usa 1,44–8,66 bits/chave vs 130 do método convencional.", 7.0)
+    d.espaco(6)
+    d.figura(110, lambda ctx, x, y, w, h: (graf_t(ctx, x, y, w / 2 - 4, h, tam=7.0), graf_tempo(ctx, x + w / 2 + 4, y, w / 2 - 4, h, tam=7.0)))
+    d.legenda("Figura 2 – Esq.: T'' medido segue (1−(1−φ'')^d)/φ''. Dir.: tempo por consulta cresce com d e n por efeito de hierarquia de cache.", 7.0)
+
     s_a = resumo_z("aleatoria")
     s_s = resumo_z("sequencial")
     dp_seq = linha_exp("sequencial", 10000, 0.5)["P_dp"]
     dp_ale = linha_exp("aleatoria", 10000, 0.5)["P_dp"]
-    d.paragrafo("**Resultados e interpretação.** (1) φ'' medido = 0,500 em todas as configurações, como prevê o ponto ótimo. (2) P'' medido acompanha (1−φ'')^d: com chaves pseudoaleatórias, "
-                "%d das %d configurações ficam a menos de 2 erros-padrão da fórmula (máx. %.1f%% de desvio relativo) — o artigo descreve bem a implementação. (3) Com chaves **sequenciais** o "
-                "desvio padrão é maior (P''=1/2, n=10⁴: %s contra %s) e %d/%d configurações ficam a menos de 2 erros-padrão: os hashes não criptográficos se afastam um pouco da hipótese de "
-                "uniformidade nesses dados. (4) T'' medido é menor que o 2 do artigo porque d é finito e a consulta para em d bits: (1−(1−φ'')^d)/φ'' prevê o valor medido (entre parênteses). "
-                "(5) O tempo por consulta (entre 27 e 95 ns) cresce com d e com n, o que é efeito de acessos à memória/cache; **tempo medido não comprova complexidade assintótica**. "
-                "(6) Espaço: 1,44·log₂(1/P'') bits/chave — para P''=1/16, 5,77 bits contra 130 do método convencional (b = 64 e T = 4), 22 vezes menos."
-                % (s_a[0], s_a[2], 100 * maior_desvio_rel("aleatoria"), pt(dp_seq, 4), pt(dp_ale, 4), s_s[0], s_s[2]))
-    linhas = []
+    d.lista([
+        "**Ponto ótimo (φ''):** em todas as 36 configurações (2 distribuições × 3 tamanhos × 6 erros), φ'' empírico manteve-se em **0,500** (desvio ≤ 0,007), confirmando o dimensionamento.",
+        "**Aderência de P'' e efeito da distribuição:** com chaves **pseudoaleatórias**, **%d de %d** configurações ficaram a menos de 2 erros-padrão de (1−φ'')^d (desvio relativo máximo de **%.1f%%**). "
+        "Com chaves **sequenciais**, o desvio padrão foi até 4,8× maior (ex.: P''=1/2, n=10⁴: %s vs %s) e **%d/%d** ficaram abaixo de 2 erros-padrão — evidenciando que hashes não criptográficos "
+        "(FNV-1a/DJB2) sofrem pequena perda de uniformidade em strings com prefixo comum, embora a média permaneça próxima da teoria."
+        % (s_a[0], s_a[2], 100 * maior_desvio_rel("aleatoria"), pt(dp_seq, 4), pt(dp_ale, 4), s_s[0], s_s[2]),
+        "**Tempo de rejeição (T''):** o artigo aproxima T'' = 1/φ'' = 2 assumindo d grande; como na prática d ∈ {1…6} é finito e o falso positivo interrompe no d-ésimo bit, a soma truncada "
+        "**(1 − (1 − φ'')^d)/φ''** reproduz T'' medido (ex.: 1,000 em d=1; 1,873 vs 1,875 em d=4; 1,969 vs 1,969 em d=6).",
+        "**Espaço e tempo de máquina:** o filtro usa de **1,44 a 8,66 bits/chave** (22,5× menos que os 130 bits/chave do método convencional em P''=1/16). "
+        "O tempo de consulta (27–95 ns no geral; 54–95 ns nas pseudoaleatórias) sobe de n=10⁵ (≈ 70 KB em P''=1/16, cabe na L2) para n=10⁶ (≈ 704 KB); **tempo medido não comprova complexidade assintótica**.",
+    ], 7.8, depois=1.0, entrelinha=1.15)
+
+    d.subsecao("4.4 Reprodução da aplicação do artigo: hifenização com dicionário em disco", 9.0)
+    d.paragrafo(
+        "Simulação do caso da Seção 7 do artigo (500.000 palavras totais; 50.000 exceções guardadas no filtro em RAM; 450.000 palavras regulares). "
+        "Cada aceitação gera 1 acesso simulado ao disco (50.000 reais + falsos positivos).",
+        7.9, depois=1.2)
+    linhas_hif = []
     for l in HIF:
         a = ARTIGO_TABELA[l["P_alvo"]]
-        linhas.append([frac(l["P_alvo"]), milhar(l["N_bits"]), milhar(a[0]), milhar(l["acessos_disco"]), pt(100 * l["economia_acessos"], 1) + "%", pt(a[1], 1) + "%"])
-    d.paragrafo("**Caso da aplicação do artigo (hifenização simulada):** 500.000 palavras, 50.000 exceções no dicionário em disco; acessos = exceções + falsos positivos.", depois=2)
-    d.tabela(["P'' alvo", "N'' (aqui)", "N'' (artigo)", "acessos ao disco (aqui)", "economia (aqui)", "economia (artigo)"], linhas, [1, 1.3, 1.3, 1.8, 1.4, 1.4], 7.4, ["centro"] * 6)
-    d.paragrafo("A economia de acessos coincide com a Tabela I do artigo (84,4% para P''=1/16 com N''=288.540 < 300.000 bits). Nosso N'' é um pouco menor que o do artigo porque usamos a fórmula do ponto "
-                "ótimo (1,44·n·log₂(1/P'')) em vez das leituras do gráfico do autor.")
-    d.paragrafo("**Limitações do experimento:** uma única máquina; tempo sujeito a ruído; consultas ausentes não são adversárias; apenas hashes não criptográficos; o dicionário em disco é simulado.")
+        linhas_hif.append([frac(l["P_alvo"]), int(l["d"]), milhar(l["N_bits"]), milhar(a[0]), milhar(l["falsos_positivos"]),
+                           milhar(l["acessos_disco"]), pt(100 * l["economia_acessos"], 1) + "%", pt(a[1], 1) + "%"])
+    d.tabela(["P'' alvo", "d", "N'' (nossa imp.)", "N'' (artigo)", "Falsos pos.", "Acessos disco", "Economia (aqui)", "Economia (artigo)"],
+             linhas_hif, [0.9, 0.4, 1.35, 1.2, 1.15, 1.3, 1.35, 1.35], 6.8, ["centro"] * 8)
+    d.paragrafo(
+        "Em P''=1/16, obtivemos **84,4%** de redução de acessos com N''=288.540 bits (< 300.000 bits citados por Bloom). Nosso N'' é levemente menor que o da Tabela I "
+        "porque o autor arredondou leituras visuais do seu gráfico normalizado, enquanto aplicamos a fórmula exata do ponto ótimo.",
+        7.8, depois=1.5, entrelinha=1.15)
 
-    d.secao("5. Limitações conhecidas")
+    d.secao("5. Limitações conhecidas", 9.8)
     d.lista([
-        "Não há remoção (I1): retirar uma chave exigiria reconstruir o filtro; n precisa ser estimado antes (acima dele, P'' aumenta).",
-        "O falso positivo não some: toda aplicação precisa de um teste secundário para as chaves aceitas.",
-        "Hash duplo no lugar de d hashes independentes; hashes FNV-1a/DJB2 não resistem a um adversário; endereços de uma chave podem coincidir.",
-        "O Método 1 do artigo não foi implementado; a aplicação em navegadores (slides) é uma hipótese fundamentada, não um sistema construído.",
-    ])
+        "**Estruturais:** não permite remoção de chaves (I1 exige reconstruir o filtro); requer estimativa prévia de n (acima dele P'' cresce rápido); todo aceite exige teste secundário.",
+        "**Da implementação e experimento:** hash duplo com FNV-1a/DJB2 (não resistente a adversários); colisões internas de endereços não são impedidas; dicionário em disco apenas simulado; "
+        "medições feitas em uma única máquina e sujeitas a variação de cache/escalonamento.",
+    ], 7.8, depois=1.0, entrelinha=1.15)
 
-    d.secao("6. Contribuições de cada integrante e uso de IA")
-    d.tabela(["Integrante", "Contribuição (registrar o que cada um fez)"], [[n, "______________________________"] for n in INTEGRANTES], [3, 7], 7.8)
-    d.paragrafo("**Uso de IA:** um assistente de IA foi usado, a pedido do grupo, para redigir e simplificar o código em C, os testes, o experimento e o texto destes PDFs. Os testes e o experimento foram "
-                "executados e os resultados conferidos contra as fórmulas do artigo. Todo integrante deve conseguir explicar o material entregue.", 8.6)
+    d.secao("6. Contribuições de cada integrante e declaração de uso de IA", 9.8)
+    d.tabela(["Integrante", "Contribuição efetiva no trabalho (preencher antes da entrega final)"],
+             [[n, "____________________________________________________________"] for n in INTEGRANTES], [3.2, 6.8], 7.0)
+    d.paragrafo(
+        "**Declaração de uso de IA:** um assistente de IA foi utilizado, sob solicitação do grupo, como apoio para estruturar, simplificar e comentar o código em C, elaborar os testes "
+        "automatizados, estruturar o experimento e redigir/diagramar os documentos em PDF. Todos os programas foram compilados e executados localmente pelo grupo, conferindo a saída dos "
+        "testes e a aderência dos resultados às equações do artigo. Todos os integrantes respondem integralmente pelo conteúdo entregue.",
+        7.7, depois=1.0, entrelinha=1.15)
+
     paginas_conteudo = d.pagina
     d.nova_pagina()
-    d.secao("Referências")
+    d.secao("Referências bibliográficas", 11)
     d.lista([
-        REF_BLOOM,
-        "Fowler, G.; Noll, L. C.; Vo, K.-P. FNV hash (variante FNV-1a de 64 bits). http://www.isthe.com/chongo/tech/comp/fnv/",
-        "Bernstein, D. J. Hash DJB2. Descrição em http://www.cse.yorku.ca/~oz/hash.html",
-        "Steele, G. L.; Lea, D.; Flood, C. H. (2014). Fast splittable pseudorandom number generators. OOPSLA 2014 (mistura SplitMix64 usada para gerar chaves).",
-        "Kirsch, A.; Mitzenmacher, M. (2006). Less hashing, same performance: building a better Bloom filter. ESA 2006 (justifica o hash duplo).",
-        "Universidade Federal da Fronteira Sul (2026). Estudo e implementação de uma solução de artigo científico — enunciado do trabalho de ED2 (GEX1210).",
-    ], 8.8)
+        "**[Artigo base]** " + REF_BLOOM + " — Define os três fatores (espaço N, tempo de rejeição T, erro P), compara o método convencional, Método 1 e Método 2 (Filtro de Bloom) e apresenta a aplicação de hifenização (Tabela I).",
+        "**[Hash duplo]** Kirsch, A.; Mitzenmacher, M. (2006). Less hashing, same performance: building a better Bloom filter. Proceedings of the 14th European Symposium on Algorithms (ESA 2006), pp. 456–467. — Demonstra que combinar dois hashes independentes preserva assintoticamente o desempenho de d hashes independentes.",
+        "**[Hash FNV-1a]** Fowler, G.; Noll, L. C.; Vo, K.-P. The FNV Non-Cryptographic Hash Algorithm (variante FNV-1a de 64 bits). Disponível em: http://www.isthe.com/chongo/tech/comp/fnv/ — Utilizado como `calcular_primeiro_hash_fnv1a` em `src/filtro_bloom.c`.",
+        "**[Hash DJB2]** Bernstein, D. J. Hash DJB2. Descrição clássica documentada em: http://www.cse.yorku.ca/~oz/hash.html — Utilizado com etapa adicional de mistura de bits como `calcular_segundo_hash_djb2`.",
+        "**[Gerador SplitMix64]** Steele, G. L.; Lea, D.; Flood, C. H. (2014). Fast splittable pseudorandom number generators. OOPSLA 2014, pp. 453–472. — Utilizado em `tests/experimento.c` para gerar chaves pseudoaleatórias determinísticas e reproduzíveis.",
+        "**[Aplicação na literatura]** Chang, F. et al. (2006). Bigtable: a distributed storage system for structured data. OSDI 2006, pp. 205–218. — Aplicação de referência citada no seminário para redução de leituras em disco (SSTables).",
+        "**[Enunciado]** Universidade Federal da Fronteira Sul (2026). Estudo e implementação de uma solução de artigo científico — Roteiro de avaliação de Estruturas de Dados II (GEX1210), UFFS Campus Chapecó.",
+    ], 8.8, depois=5, entrelinha=1.3)
     d.fim()
     return paginas_conteudo
 

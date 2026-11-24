@@ -310,10 +310,10 @@ def grafico(ctx, x, y, w, h, series, xlabel, ylabel, xlim, ylim, xticks, yticks,
     ctx.rectangle(px, py, pw, ph); ctx.stroke()
     # rótulos dos eixos
     esc.desenhar(xlabel, px, py + ph + tam + 8, pw, tam, PRETO, 1.2, alinhar="centro")
-    ctx.save()
-    ctx.translate(x + 2, py + ph / 2 + 20)
-    ctx.rotate(-math.pi / 2)
     definir_fonte(ctx, tam); ctx.set_source_rgb(*PRETO)
+    ctx.save()
+    ctx.translate(x + 2, py + ph / 2 + ctx.text_extents(ylabel).x_advance / 2)
+    ctx.rotate(-math.pi / 2)
     ctx.move_to(0, 7); ctx.show_text(ylabel)
     ctx.restore()
     # linha de referência
