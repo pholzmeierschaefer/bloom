@@ -1,50 +1,80 @@
-#include "filtro_bloom.h" /* filtro */
-#include <stdio.h>       /* printf */
+/*
+ * ============================================================================
+ * MÓDULO DE EXEMPLO DIDÁTICO: tests/exemplo.c
+ * ============================================================================
+ *
+ * O que este módulo faz:
+ *   Cria um Filtro de Bloom bem pequeno (apenas 24 bits e 3 funções hash) para
+ *   imprimir o vetor bit a bit na tela a cada inserção e consulta.
+ *   É o mesmo exemplo ilustrado nos slides 6 e 7 da apresentação do seminário:
+ *     - Inserções: "gato", "cao", "pato".
+ *     - Consultas: "gato" (presente), "peixe" (rejeita em 1 bit),
+ *       "galo" (rejeita em 2 bits) e "coelho" (falso positivo didático).
+ * ============================================================================
+ */
 
-/* Mostra o vetor de bits em uma linha (posição 0 à esquerda). */
-static void mostrar_bits(const FiltroBloom *f) {
-    printf("   bits: ");                                          /* rótulo */
-    for (size_t pos = 0; pos < f->total_bits; pos++) {            /* para cada posição */
-        printf("%d", (f->bits[pos / 8] >> (pos % 8)) & 1);        /* imprime 0 ou 1 */
+#include "filtro_bloom.h" /* Interface do Filtro de Bloom */
+#include <stdio.h>        /* Função printf */
+
+/*
+ * Imprime todos os bits do filtro em uma única linha (da posição 0 até total_bits - 1).
+ */
+static void mostrar_vetor_de_bits(const FiltroBloom *filtro) {
+    printf("   bits: ");
+    for (size_t posicao_bit = 0; posicao_bit < filtro->total_bits; posicao_bit++) {
+        int valor_bit = (filtro->vetor_de_bits[posicao_bit / 8] >> (posicao_bit % 8)) & 1;
+        printf("%d", valor_bit);
     }
-    printf("\n");                                                 /* fim da linha */
+    printf("\n");
 }
 
-/* Mostra os endereços (bits) que uma chave usa. */
-static void mostrar_enderecos(const FiltroBloom *f, const char *chave) {
-    printf("   '%s' usa os bits:", chave);                        /* rótulo */
-    for (size_t i = 0; i < f->qtd_hashes; i++) {                  /* para cada endereço */
-        printf(" %zu", filtro_endereco(f, chave, i));             /* imprime o endereço */
+/*
+ * Mostra na tela quais são as d posições de bit calculadas para uma chave específica.
+ */
+static void mostrar_enderecos_chave(const FiltroBloom *filtro, const char *chave) {
+    printf("   '%s' usa os bits:", chave);
+    for (size_t indice_hash = 0; indice_hash < filtro->quantidade_hashes; indice_hash++) {
+        printf(" %zu", filtro_endereco(filtro, chave, indice_hash));
     }
-    printf("\n");                                                 /* fim da linha */
+    printf("\n");
 }
 
 int main(void) {
-    const char *inseridas[] = {"gato", "cao", "pato"};            /* chaves que vamos guardar */
-    const char *consultadas[] = {"gato", "peixe", "galo", "coelho"}; /* chaves buscadas */
-    FiltroBloom *f = filtro_criar(24, 3);                         /* filtro pequeno: N = 24 bits, d = 3 */
+    const char *palavras_inseridas[] = {"gato", "cao", "pato"};
+    const char *palavras_consultadas[] = {"gato", "peixe", "galo", "coelho"};
 
-    printf("=== EXEMPLO PASSO A PASSO (N = 24 bits, d = 3) ===\n"); /* título */
-    printf("Estado inicial:\n");                                  /* antes de inserir */
-    mostrar_bits(f);                                              /* tudo 0 */
+    /* Cria um filtro pequeno (N'' = 24 bits e d = 3 hashes) fácil de conferir à mão */
+    FiltroBloom *filtro = filtro_criar(24, 3);
 
-    for (int i = 0; i < 3; i++) {                                 /* insere cada chave */
-        printf("\nInserindo '%s':\n", inseridas[i]);              /* mensagem */
-        mostrar_enderecos(f, inseridas[i]);                       /* endereços da chave */
-        filtro_inserir(f, inseridas[i]);                          /* liga os bits */
-        mostrar_bits(f);                                          /* mostra o vetor */
+    printf("=== EXEMPLO PASSO A PASSO (N = 24 bits, d = 3) ===\n");
+    printf("Estado inicial:\n");
+    mostrar_vetor_de_bits(filtro);
+
+    /* Passo 1: insere cada palavra e mostra o vetor atualizado após cada inserção */
+    for (int indice = 0; indice < 3; indice++) {
+        printf("\nInserindo '%s':\n", palavras_inseridas[indice]);
+        mostrar_enderecos_chave(filtro, palavras_inseridas[indice]);
+        filtro_inserir(filtro, palavras_inseridas[indice]);
+        mostrar_vetor_de_bits(filtro);
     }
 
-    printf("\nConsultas:\n");                                     /* consultas */
-    for (int i = 0; i < 4; i++) {                                 /* para cada chave buscada */
-        size_t lidos = 0;                                         /* bits lidos */
-        bool aceita = filtro_consultar(f, consultadas[i], &lidos);/* consulta */
-        mostrar_enderecos(f, consultadas[i]);                     /* endereços */
-        printf("   -> %s (bits lidos: %zu)\n", aceita ? "ACEITA" : "REJEITADA", lidos); /* resultado */
+    /* Passo 2: consulta as 4 palavras e informa quantos bits foram lidos até decidir */
+    printf("\nConsultas:\n");
+    for (int indice = 0; indice < 4; indice++) {
+        size_t quantidade_bits_lidos = 0;
+        bool elemento_aceito = filtro_consultar(filtro, palavras_consultadas[indice], &quantidade_bits_lidos);
+        mostrar_enderecos_chave(filtro, palavras_consultadas[indice]);
+        printf("   -> %s (bits lidos: %zu)\n",
+               elemento_aceito ? "ACEITA" : "REJEITADA",
+               quantidade_bits_lidos);
     }
+
+    /* Passo 3: mostra a comparação entre o phi'' medido e os valores teóricos do filtro */
     printf("\nphi medido = %.3f | phi previsto = %.3f | P previsto = %.3f\n",
-           filtro_phi_empirico(f), filtro_phi_teorico(f), filtro_erro_teorico(f)); /* medidas */
+           filtro_phi_empirico(filtro),
+           filtro_phi_teorico(filtro),
+           filtro_erro_teorico(filtro));
 
-    filtro_destruir(f);                                           /* libera */
-    return 0;                                                     /* sucesso */
+    filtro_destruir(filtro);
+    return 0;
 }

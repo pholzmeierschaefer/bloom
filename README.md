@@ -50,8 +50,8 @@ make limpar        # apaga bin/
 | Artigo | Código |
 |---|---|
 | N'' (bits) | `total_bits` |
-| d (endereços por mensagem) | `qtd_hashes` |
-| n (mensagens inseridas) | `qtd_inseridos` |
+| d (endereços por mensagem) | `quantidade_hashes` |
+| n (mensagens inseridas) | `quantidade_inseridos` |
 | φ'' = (1 − d/N'')ⁿ | `filtro_phi_empirico` (medido) e `filtro_phi_teorico` (fórmula) |
 | P'' = (1 − φ'')^d | `filtro_erro_teorico` |
 | T'' (bits lidos até rejeitar) | argumento `bits_lidos` de `filtro_consultar` |

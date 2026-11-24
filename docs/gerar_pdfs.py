@@ -202,8 +202,8 @@ def gerar_relatorio():
                 "se algum vale 0, x é **rejeitada** (certamente ausente); se todos valem 1, x é **aceita** (provavelmente presente).")
     d.tabela(["Artigo", "Código", "Significado"], [
         ["N''", "`total_bits`", "bits do vetor"],
-        ["d", "`qtd_hashes`", "endereços (bits) por mensagem"],
-        ["n", "`qtd_inseridos`", "mensagens inseridas"],
+        ["d", "`quantidade_hashes`", "endereços (bits) por mensagem"],
+        ["n", "`quantidade_inseridos`", "mensagens inseridas"],
         ["φ'' = (1 − d/N'')ⁿ ≈ e^(−nd/N'')", "`filtro_phi_empirico/teorico`", "fração de bits que valem 0"],
         ["P'' = (1 − φ'')^d", "`filtro_erro_teorico`", "probabilidade de falso positivo"],
         ["T'' ≈ 1/φ''", "argumento `bits_lidos`", "bits lidos até rejeitar"],
